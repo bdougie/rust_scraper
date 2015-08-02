@@ -6,3 +6,5 @@ authors = ["Brian Douglas <ilikerobot@gmail.com>"]
 [lib]
 name = "scrape"
 crate-type = ["dylib"]
+
+[dependencies.hyper]
