@@ -1,29 +1,65 @@
 #![feature(libc)]
-#![feature(cstr_to_str)]
 #![feature(cstr_memory)]
 extern crate libc;
-extern crate hyper;
 
-use hyper::Client;
-use hyper::header::Connection;
-use std::io::Read;
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
+use std::mem;
+
+#[repr(C)]
+pub struct RubyArray {
+  len: libc::size_t,
+  data: *const libc::c_void,
+}
+
+impl RubyArray {
+  fn from_vec<T>(vec: Vec<T>) -> RubyArray {
+    let array = RubyArray { 
+      data: vec.as_ptr() as *const libc::c_void, 
+      len: vec.len() as libc::size_t };
+    mem::forget(vec);
+    array
+  }
+}
+
+pub struct TwoNumbers {
+    first: i32,
+    second: i32,
+}
+
+impl TwoNumbers {
+    fn plus_one_to_each(self) -> TwoNumbers {
+        let mut tn = self;
+        tn.first += 1;
+        tn.second += 1;
+        tn
+    }
+}
 
 #[no_mangle]
-pub extern fn get_body(c_url: *const libc::c_char) -> *const libc::c_char {
-    let url = ruby_string_to_ref_str(c_url);
-    let client = Client::new();
-    let temp_resp = client.get(url).header(Connection::close()).send();
-    let mut resp = temp_resp.unwrap();
-    let mut body = String::new();
-    resp.read_to_string(&mut body).unwrap();
-    string_to_ruby_string(body)
+pub extern fn add_one_to_vals(numbers: TwoNumbers) -> TwoNumbers {
+   numbers.plus_one_to_each()
 }
 
-fn ruby_string_to_ref_str<'a>(r_string: *const libc::c_char) -> &'a str {
-    unsafe { CStr::from_ptr(r_string) }.to_str().unwrap()
+#[no_mangle]
+pub extern fn add_struct_vals(numbers: TwoNumbers) -> i32 {
+    numbers.first + numbers.second
 }
 
-fn string_to_ruby_string(string: String) -> *const libc::c_char {
-    CString::new(string).unwrap().into_ptr()
+#[no_mangle]
+pub extern fn print_chars() {
+    for i in 33..126 {
+        println!("{:?}", std::char::from_u32(i).unwrap());
+    }
+}
+
+#[no_mangle]
+pub extern fn number_to_char_array() -> RubyArray {
+  let mut utf_chars: Vec<*const libc::c_char> = vec![];
+
+  for i in 33..126 {
+    let maybe_char: Option<char> = std::char::from_u32(i);
+    utf_chars.push(CString::new(maybe_char.unwrap().to_string()).unwrap().into_ptr());
+  }
+
+  RubyArray::from_vec(utf_chars)
 }
