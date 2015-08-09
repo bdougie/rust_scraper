@@ -1,65 +1,35 @@
-#![feature(libc)]
-#![feature(cstr_memory)]
-extern crate libc;
+#![feature(test)]
+extern crate hyper;
+use std::sync::Arc;
+use std::thread;
+extern crate test;
+use hyper::Client;
+use std::io::Read;
+extern crate time;
 
-use std::ffi::CString;
-use std::mem;
+#[no_mangle]
+pub extern fn run_threads() {
+    let start_time = time::now();
+    let client = Arc::new(Client::new());
+    let threads: Vec<_> = (0..5).map(|i| {
+        let client = client.clone();
+        thread::spawn(move || {
+            println!("Requesting {}", i.to_string());
+            let mut response = client.get("http://wikipedia.com").send().unwrap();
+            let mut body = String::new();
+            response.read_to_string(&mut body).unwrap();
+            body.len().to_string()
+        })
+    }).collect();
 
-#[repr(C)]
-pub struct RubyArray {
-  len: libc::size_t,
-  data: *const libc::c_void,
-}
-
-impl RubyArray {
-  fn from_vec<T>(vec: Vec<T>) -> RubyArray {
-    let array = RubyArray { 
-      data: vec.as_ptr() as *const libc::c_void, 
-      len: vec.len() as libc::size_t };
-    mem::forget(vec);
-    array
-  }
-}
-
-pub struct TwoNumbers {
-    first: i32,
-    second: i32,
-}
-
-impl TwoNumbers {
-    fn plus_one_to_each(self) -> TwoNumbers {
-        let mut tn = self;
-        tn.first += 1;
-        tn.second += 1;
-        tn
+    let responses: Vec<_> = threads
+        .into_iter()
+        .map(|thread| thread.join())
+        .collect();
+    println!("All threads joined. Full responses are:");
+    for response in responses.into_iter() {
+        println!("The response have the following lengths: {:?}", response.ok());
     }
-}
-
-#[no_mangle]
-pub extern fn add_one_to_vals(numbers: TwoNumbers) -> TwoNumbers {
-   numbers.plus_one_to_each()
-}
-
-#[no_mangle]
-pub extern fn add_struct_vals(numbers: TwoNumbers) -> i32 {
-    numbers.first + numbers.second
-}
-
-#[no_mangle]
-pub extern fn print_chars() {
-    for i in 33..126 {
-        println!("{:?}", std::char::from_u32(i).unwrap());
-    }
-}
-
-#[no_mangle]
-pub extern fn number_to_char_array() -> RubyArray {
-  let mut utf_chars: Vec<*const libc::c_char> = vec![];
-
-  for i in 33..126 {
-    let maybe_char: Option<char> = std::char::from_u32(i);
-    utf_chars.push(CString::new(maybe_char.unwrap().to_string()).unwrap().into_ptr());
-  }
-
-  RubyArray::from_vec(utf_chars)
+    let end_time = time::now();
+    println!("{:?}", (end_time - start_time));
 }
